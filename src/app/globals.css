@@ -3,19 +3,102 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --primary: #7C3AED;
+  --primary-dark: #6D28D9;
+  --background: #0F172A;
+  --foreground: #F8FAFC;
+  --card: #1E293B;
+  --border: #334155;
+  --muted: #64748B;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image: 
+      radial-gradient(circle at top right, rgb(124 58 237 / 0.05), transparent 25%),
+      radial-gradient(circle at bottom left, rgb(124 58 237 / 0.05), transparent 25%);
+  }
+
+  /* Animation de fond cyberpunk */
+  @keyframes matrix-bg {
+    0% { background-position: 0% 0%; }
+    100% { background-position: 100% 100%; }
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-dark text-white font-medium 
+           py-2 px-4 rounded-lg transition-colors
+           shadow-lg;
+  }
+  
+  .input-field {
+    @apply w-full bg-card border border-border rounded-lg px-4 py-2 
+           text-foreground
+           focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-25
+           focus:border-transparent
+           placeholder:text-muted
+           transition-shadow duration-200;
+  }
+
+  .card {
+    @apply bg-card border border-border rounded-lg p-6
+           shadow-lg transition-shadow duration-300
+           hover:shadow-xl;
+  }
+
+  .message-bubble {
+    @apply max-w-[70%] rounded-lg p-3 transition-shadow duration-200;
+  }
+
+  .message-bubble-sent {
+    @apply bg-primary text-white shadow-md;
+  }
+
+  .message-bubble-received {
+    @apply bg-card text-foreground shadow-md;
+  }
+
+  /* Nouvelles classes pour effets futuristes */
+  .cyber-background {
+    background: linear-gradient(45deg, 
+      rgba(124, 58, 237, 0.1),
+      rgba(124, 58, 237, 0),
+      rgba(124, 58, 237, 0.1)
+    );
+    background-size: 400% 400%;
+    animation: matrix-bg 15s ease infinite;
+  }
+
+  .cyber-card {
+    @apply relative overflow-hidden;
+  }
+
+  .cyber-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+    animation: cyber-scan 2s linear infinite;
+  }
+
+  @keyframes cyber-scan {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  .cyber-text {
+    @apply relative inline-block;
+    text-shadow: 0 0 10px var(--primary);
+  }
+
+  .cyber-glow {
+    box-shadow: 0 0 20px rgba(124, 58, 237, 0.3);
+  }
 }
+

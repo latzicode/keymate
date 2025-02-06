@@ -1,0 +1,81 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")  
+}
+
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  password   String   // Chiffré en Bcrypt
+  username   String   @unique
+  avatar     String?
+  publicKey  String   // Clé publique PGP
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  // Nouveaux champs
+  keyVault  KeyVault? // Relation one-to-one
+  activeKeyId String? // Clé actuellement sélectionnée
+  // Relations
+  contacts       Contact[] @relation("UserContacts")
+  contactUsers   Contact[] @relation("UserAsContact")
+  sentMessages   Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+}
+
+model Contact {
+  id          String @id @default(uuid())
+  userId      String
+  contactId   String
+  status      String  // pending, accepted, blocked
+  trustLevel  Int     // 1=contact, 2=ami, 3=cercle confiance
+
+  // Relations corrigées avec des noms explicites
+  user        User @relation(name: "UserContacts", fields: [userId], references: [id])
+  contactUser User @relation(name: "UserAsContact", fields: [contactId], references: [id])
+}
+
+model Message {
+  id          String   @id @default(uuid())
+  senderId    String
+  receiverId  String
+  content     String   // Chiffré
+  signature   String   // Signature PGP
+  createdAt   DateTime @default(now())
+  // Nouveaux champs
+  usedKeyId   String?   // Clé utilisée pour le chiffrement
+  keyVersion  String?   // Version de la clé utilisée
+  // Relations corrigées
+  sender      User @relation(name: "SentMessages", fields: [senderId], references: [id])
+  receiver    User @relation(name: "ReceivedMessages", fields: [receiverId], references: [id])
+}
+
+// Nouvelle entité
+model KeyVault {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id])
+  keys        Key[]    // Relation one-to-many
+}
+
+// Nouvelle entité
+model Key {
+  id          String   @id @default(uuid())
+  vaultId     String
+  vault       KeyVault @relation(fields: [vaultId], references: [id])
+  name        String   // Nom donné par l'utilisateur
+  publicKey   String
+  privateKey  String?  // Optionnel, chiffré
+  type        String   // "personal" ou "contact"
+  createdAt   DateTime @default(now())
+  lastUsed    DateTime @updatedAt
+}
