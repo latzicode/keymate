@@ -71,8 +71,44 @@ export async function GET() {
       ...contactsAsContact.map(c => c.user)
     ];
 
+    // Juste après la récupération des contacts (ligne 72)
+    const sharedKeys = await prisma.key.findMany({
+      where: {
+        type: 'contact',
+        vault: {
+          userId: payload.userId
+        },
+        originalKey: {
+          vault: {
+            userId: {
+              in: allContacts.map(c => c.id)
+            }
+          }
+        }
+      },
+      select: {
+        id: true,
+        name: true,
+        originalKey: {
+          select: {
+            vault: {
+              select: {
+                userId: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    // Attacher les clés aux contacts
+    const contactsWithKeys = allContacts.map(contact => ({
+      ...contact,
+      sharedKeys: sharedKeys.filter(k => k.originalKey?.vault.userId === contact.id)
+    }));
+
     return NextResponse.json({
-      contacts: allContacts,
+      contacts: contactsWithKeys,
       pendingRequests: pendingRequests.map(r => ({
         id: r.id,
         user: r.user

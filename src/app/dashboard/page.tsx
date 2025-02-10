@@ -2,6 +2,12 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
+import KeyList from '@/components/vault/KeyList';
+import KeyDetails from '@/components/vault/KeyDetails';
+import KeyGenerator from '@/components/pgp/KeyGenerator';
+import ShareKeyModal from '@/components/vault/ShareKeyModal';
+import KeySelector from '@/components/pgp/KeySelector';
+import EncryptionVisualizer from '@/components/pgp/EncryptionVisualizer';
 
 interface User {
   id: string;
@@ -14,12 +20,14 @@ interface Message {
   content: string;
   senderId: string;
   createdAt: string;
+  keyId: string;
 }
 
 interface Contact {
   id: string;
   username: string;
   email: string;
+  sharedKeys?: { id: string; name: string }[];
 }
 
 interface PendingRequest {
@@ -29,6 +37,16 @@ interface PendingRequest {
     username: string;
     email: string;
   };
+}
+
+interface Key {
+  id: string;
+  name: string;
+  type: 'personal' | 'contact';
+  publicKey: string;
+  privateKey?: string;
+  createdAt: string;
+  lastUsed: string;
 }
 
 export default function DashboardPage() {
@@ -44,6 +62,16 @@ export default function DashboardPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [selectedKey, setSelectedKey] = useState<Key | null>(null);
+  const [showKeyGenerator, setShowKeyGenerator] = useState(false);
+  const [sharingWithContact, setSharingWithContact] = useState<string | null>(null);
+  const [selectedKeyId, setSelectedKeyId] = useState('');
+  const [encryptedPreview, setEncryptedPreview] = useState('');
+  const [isEncrypting, setIsEncrypting] = useState(false);
+  const [decryptedMessages, setDecryptedMessages] = useState<{[key: string]: string}>({});
+  const [isDecrypting, setIsDecrypting] = useState<{[key: string]: boolean}>({});
+  const [showDecryptModal, setShowDecryptModal] = useState<string | null>(null);
+  const [keys, setKeys] = useState<Key[]>([]);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -220,6 +248,136 @@ export default function DashboardPage() {
     }
   };
 
+  const handleKeyGenerated = async (keyPair: { publicKey: string; privateKey: string }) => {
+    setShowKeyGenerator(false);
+    // Rafraîchir la liste des clés
+    window.location.reload();
+  };
+
+  // Modifier le handler de partage
+  const handleShareKey = async (keyId: string) => {
+    if (!sharingWithContact) return;
+    
+    try {
+      const res = await fetch('/api/contacts/share-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contactId: sharingWithContact,
+          keyId
+        })
+      });
+
+      if (!res.ok) throw new Error('Erreur lors du partage de la clé');
+      
+      // Rafraîchir la liste des contacts
+      window.location.reload();
+    } catch (error) {
+      console.error('Erreur partage:', error);
+      throw error;
+    }
+  };
+
+  useEffect(() => {
+    if (isEncrypting && selectedKeyId && newMessage && user?.id) {
+      const encrypt = async () => {
+        try {
+          const res = await fetch('/api/encrypt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: newMessage,
+              keyId: selectedKeyId,
+              userId: user.id
+            })
+          });
+
+          if (!res.ok) throw new Error('Erreur chiffrement');
+          
+          const { encrypted } = await res.json();
+          setEncryptedPreview(encrypted);
+        } catch (error) {
+          console.error('Erreur chiffrement:', error);
+        } finally {
+          setIsEncrypting(false);
+        }
+      };
+      
+      encrypt();
+    }
+  }, [isEncrypting, selectedKeyId, newMessage, user?.id]);
+
+  // Fonction d'envoi du message chiffré
+  const sendEncryptedMessage = async () => {
+    if (!encryptedPreview) return;  // On s'assure qu'on a un message chiffré
+    
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receiverId: selectedContact.id,
+          content: encryptedPreview,  // On envoie exactement le même message chiffré
+          keyId: selectedKeyId
+        })
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Erreur envoi message');
+      }
+
+      const data = await res.json();
+      setMessages(prev => [...prev, data.message]);
+      setNewMessage('');
+      setEncryptedPreview('');
+    } catch (error) {
+      console.error('Erreur envoi:', error);
+    }
+  };
+
+  const decryptMessage = async (messageId: string, encryptedContent: string, keyId: string) => {
+    if (decryptedMessages[messageId]) return;
+    
+    setIsDecrypting(prev => ({ ...prev, [messageId]: true }));
+    
+    try {
+      const res = await fetch('/api/decrypt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: encryptedContent,
+          keyId: keyId,
+          userId: user?.id
+        })
+      });
+
+      if (!res.ok) throw new Error('Erreur déchiffrement');
+      
+      const { decrypted } = await res.json();
+      setDecryptedMessages(prev => ({
+        ...prev,
+        [messageId]: decrypted
+      }));
+    } catch (error) {
+      console.error('Erreur déchiffrement:', error);
+    } finally {
+      setIsDecrypting(prev => ({ ...prev, [messageId]: false }));
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+
+    const loadKeys = async () => {
+      const res = await fetch("/api/keys");
+      const data = await res.json();
+      setKeys(data.keys);
+    };
+
+    loadKeys();
+  }, [user]);
+
   if (!user) return null;
 
   return (
@@ -341,15 +499,37 @@ export default function DashboardPage() {
               {contacts?.map(contact => contact && (
                 <div
                   key={contact.id}
-                  onClick={() => setSelectedContact(contact)}
-                  className={`p-3 rounded-lg cursor-pointer transition-all ${
+                  className={`p-3 rounded-lg ${
                     selectedContact?.id === contact?.id 
                       ? 'bg-primary/10 text-primary' 
                       : 'bg-card hover:cyber-glow'
                   }`}
                 >
-                  <p className="font-medium">{contact?.username || 'Utilisateur'}</p>
-                  <p className="text-sm text-muted">{contact?.email || 'Email non disponible'}</p>
+                  <div className="flex justify-between items-start">
+                    <div 
+                      className="cursor-pointer" 
+                      onClick={() => setSelectedContact(contact)}
+                    >
+                      <p className="font-medium">{contact.username}</p>
+                      <p className="text-sm text-muted-foreground">{contact.email}</p>
+                      {contact.sharedKeys?.map((key) => (
+                        <p key={key.id} className="text-xs text-primary mt-1">
+                          {key.name}
+                        </p>
+                      ))}
+                    </div>
+                    {(!contact.sharedKeys || contact.sharedKeys.length === 0) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSharingWithContact(contact.id);
+                        }}
+                        className="text-sm text-primary hover:text-primary-dark"
+                      >
+                        Partager une clé
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
               
@@ -360,7 +540,32 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Vault</h3>
+              <button
+                onClick={() => setShowKeyGenerator(true)}
+                className="text-sm text-primary hover:text-primary-dark"
+              >
+                + Nouvelle clé
+              </button>
+            </div>
+            <KeyList onKeySelect={setSelectedKey} />
+          </div>
         </div>
+
+        {showKeyGenerator && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+            <div className="bg-white p-6 rounded-lg max-w-md w-full">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Générer une nouvelle clé</h3>
+                <button onClick={() => setShowKeyGenerator(false)}>✕</button>
+              </div>
+              <KeyGenerator onGenerate={handleKeyGenerated} />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -382,30 +587,59 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="p-4 space-y-4">
-            {messages.map(message => (
-              <div
-                key={message.id}
-                className={`flex ${
-                  message.senderId === user?.id ? 'justify-end' : 'justify-start'
-                }`}
-              >
+          {selectedKey ? (
+            <div className="p-4">
+              <KeyDetails
+                selectedKey={selectedKey}
+                onClose={() => setSelectedKey(null)}
+                onDelete={async (keyId) => {
+                  try {
+                    const res = await fetch(`/api/keys/${keyId}`, {
+                      method: 'DELETE'
+                    });
+                    if (!res.ok) throw new Error('Erreur suppression');
+                    setSelectedKey(null);
+                    window.location.reload();
+                  } catch (error) {
+                    console.error('Erreur:', error);
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <div className="p-4 space-y-4">
+              {messages.map(message => (
                 <div
-                  className={`max-w-[70%] rounded-lg p-3 ${
-                    message.senderId === user?.id
-                      ? 'bg-primary text-white'
-                      : 'bg-card'
+                  key={message.id}
+                  className={`flex ${
+                    message.senderId === user?.id ? 'justify-end' : 'justify-start'
                   }`}
                 >
-                  <p>{message.content}</p>
-                  <p className="text-xs opacity-70 mt-1">
-                    {new Date(message.createdAt).toLocaleTimeString()}
-                  </p>
+                  <div
+                    className={`max-w-[70%] rounded-lg p-3 ${
+                      message.senderId === user?.id
+                        ? 'bg-primary text-white'
+                        : 'bg-card'
+                    }`}
+                  >
+                    <p>{message.content}</p>
+                    <p className="text-xs opacity-70 mt-1">
+                      {new Date(message.createdAt).toLocaleTimeString()}
+                    </p>
+                  </div>
+                  {message.senderId !== user?.id && (
+                    <button
+                      onClick={() => setShowDecryptModal(message.id)}
+                      className="inline-flex items-center justify-center ml-2 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                      Déchiffrer
+                    </button>
+                  )}
                 </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-border">
@@ -426,7 +660,110 @@ export default function DashboardPage() {
             </button>
           </form>
         </div>
+
+        <div className="mt-4 border-t pt-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm text-muted-foreground">
+              Chiffrer avec :
+            </span>
+            
+            <div className="flex-1 relative overflow-hidden">
+              <div className="flex gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 pb-2">
+                {selectedContact?.sharedKeys?.map((key) => (
+                  <button
+                    key={key.id}
+                    onClick={() => setSelectedKeyId(key.id)}
+                    className={`
+                      flex-shrink-0 px-3 py-1 rounded-full text-sm
+                      ${selectedKeyId === key.id 
+                        ? 'bg-primary text-white' 
+                        : 'bg-gray-700 text-gray-200 hover:bg-gray-600'
+                      }
+                    `}
+                  >
+                    {key.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setIsEncrypting(true)}
+              disabled={!selectedKeyId || !newMessage}
+              className="btn-secondary text-sm px-3 py-1 flex-shrink-0"
+            >
+              Chiffrer
+            </button>
+          </div>
+
+          <EncryptionVisualizer
+            originalMessage={newMessage}
+            encryptedMessage={encryptedPreview}
+            isEncrypting={isEncrypting}
+            selectedKeyName={selectedContact?.sharedKeys?.find(k => k.id === selectedKeyId)?.name}
+          />
+
+          {encryptedPreview && !isEncrypting && (
+            <button
+              onClick={sendEncryptedMessage}
+              className="mt-4 btn-primary"
+            >
+              Envoyer le message chiffré
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Ajouter le modal */}
+      {sharingWithContact && (
+        <ShareKeyModal
+          contactId={sharingWithContact}
+          onClose={() => setSharingWithContact(null)}
+          onShare={handleShareKey}
+        />
+      )}
+
+      {/* Modal avec UNIQUEMENT les clés privées */}
+      {showDecryptModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4 border border-gray-700 shadow-xl">
+            <h3 className="text-lg font-medium mb-4 text-white">Déchiffrer le message</h3>
+            
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-300">Choisir une de vos clés privées :</div>
+              <div className="grid gap-2 max-h-[300px] overflow-y-auto">
+                {keys.filter(key => key.type === 'personal').map((key) => (
+                  <button
+                    key={key.id}
+                    onClick={() => {
+                      const message = messages.find(m => m.id === showDecryptModal);
+                      if (message) {
+                        decryptMessage(message.id, message.content, key.id);
+                        setShowDecryptModal(null);
+                      }
+                    }}
+                    className="flex items-center justify-between p-2 rounded border border-gray-700 hover:bg-gray-800 text-white"
+                  >
+                    <div>
+                      <div className="font-medium">{key.name}</div>
+                      <div className="text-xs text-gray-400">Ma clé privée</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setShowDecryptModal(null)}
+                className="px-4 py-2 text-sm text-gray-400 hover:text-white"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

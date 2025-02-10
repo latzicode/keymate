@@ -54,6 +54,7 @@ model Message {
   // Nouveaux champs
   usedKeyId   String?   // Clé utilisée pour le chiffrement
   keyVersion  String?   // Version de la clé utilisée
+  encryptionKey Key? @relation("UsedForEncryption", fields: [usedKeyId], references: [id])
   // Relations corrigées
   sender      User @relation(name: "SentMessages", fields: [senderId], references: [id])
   receiver    User @relation(name: "ReceivedMessages", fields: [receiverId], references: [id])
@@ -78,4 +79,11 @@ model Key {
   type        String   // "personal" ou "contact"
   createdAt   DateTime @default(now())
   lastUsed    DateTime @updatedAt
+  originalKeyId    String?
+  sharedWithUserId String?
+  originalKey      Key?    @relation("KeyShares", fields: [originalKeyId], references: [id])
+  sharedKeys       Key[]   @relation("KeyShares")
+  
+  // Messages utilisant cette clé (relation inverse)
+  encryptedMessages Message[] @relation("UsedForEncryption")
 }

@@ -48,20 +48,16 @@ export default function KeyList({ onKeySelect }: KeyListProps) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <h3 className="text-lg font-semibold mb-3">Clés personnelles</h3>
-          {keys.filter(k => k.type === 'personal').map(key => (
-            <KeyCard key={key.id} keyData={key} onClick={() => onKeySelect(key)} />
-          ))}
-        </div>
-
-        <div>
-          <h3 className="text-lg font-semibold mb-3">Clés de contacts</h3>
-          {keys.filter(k => k.type === 'contact').map(key => (
-            <KeyCard key={key.id} keyData={key} onClick={() => onKeySelect(key)} />
-          ))}
-        </div>
+      <div>
+        <h3 className="text-lg font-semibold mb-3">Mes clés</h3>
+        {keys.map(key => (
+          <KeyCard key={key.id} keyData={key} onClick={() => onKeySelect(key)} />
+        ))}
+        {keys.length === 0 && (
+          <p className="text-center text-muted py-4">
+            Aucune clé pour le moment
+          </p>
+        )}
       </div>
     </div>
   );

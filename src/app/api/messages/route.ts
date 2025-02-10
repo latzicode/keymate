@@ -54,22 +54,13 @@ export async function POST(request: Request) {
       }, { status: 403 });
     }
 
-    // Chiffrement du message
-    const { encrypted, keyVersion } = await EncryptionService.encryptMessage(
-      content,
-      keyId,
-      payload.userId
-    );
-
-    // Crée le message
+    // On enregistre directement le message sans re-chiffrer
     const message = await prisma.message.create({
       data: {
         senderId: payload.userId,
         receiverId,
-        content: encrypted,
-        usedKeyId: keyId,
-        keyVersion,
-        signature: '' // Pour l'instant vide, sera implémenté plus tard
+        content,  // On garde le message tel qu'il est
+        usedKeyId: keyId
       }
     });
 
