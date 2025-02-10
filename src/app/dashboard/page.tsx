@@ -337,9 +337,7 @@ export default function DashboardPage() {
   };
 
   const decryptMessage = async (messageId: string, encryptedContent: string, keyId: string) => {
-    if (decryptedMessages[messageId]) return;
-    
-    setIsDecrypting(prev => ({ ...prev, [messageId]: true }));
+    console.log('1. Tentative déchiffrement:', { messageId, encryptedContent: encryptedContent.substring(0, 100), keyId });
     
     try {
       const res = await fetch('/api/decrypt', {
@@ -347,22 +345,23 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: encryptedContent,
-          keyId: keyId,
+          keyId,
           userId: user?.id
         })
       });
-
-      if (!res.ok) throw new Error('Erreur déchiffrement');
       
-      const { decrypted } = await res.json();
+      console.log('2. Réponse API:', res.status);
+      const data = await res.json();
+      console.log('3. Données reçues:', data);
+
+      if (!res.ok) throw new Error(data.error);
+      
       setDecryptedMessages(prev => ({
         ...prev,
-        [messageId]: decrypted
+        [messageId]: data.decrypted
       }));
     } catch (error) {
-      console.error('Erreur déchiffrement:', error);
-    } finally {
-      setIsDecrypting(prev => ({ ...prev, [messageId]: false }));
+      console.error('4. ERREUR:', error);
     }
   };
 
@@ -608,34 +607,41 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="p-4 space-y-4">
-              {messages.map(message => (
-                <div
-                  key={message.id}
-                  className={`flex ${
-                    message.senderId === user?.id ? 'justify-end' : 'justify-start'
-                  }`}
-                >
+              {messages.map((message) => (
+                <>
                   <div
-                    className={`max-w-[70%] rounded-lg p-3 ${
-                      message.senderId === user?.id
-                        ? 'bg-primary text-white'
-                        : 'bg-card'
+                    key={message.id}
+                    className={`flex ${
+                      message.senderId === user?.id ? 'justify-end' : 'justify-start'
                     }`}
                   >
-                    <p>{message.content}</p>
-                    <p className="text-xs opacity-70 mt-1">
-                      {new Date(message.createdAt).toLocaleTimeString()}
-                    </p>
-                  </div>
-                  {message.senderId !== user?.id && (
-                    <button
-                      onClick={() => setShowDecryptModal(message.id)}
-                      className="inline-flex items-center justify-center ml-2 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                    <div
+                      className={`max-w-[70%] rounded-lg p-3 ${
+                        message.senderId === user?.id
+                          ? 'bg-primary text-white'
+                          : 'bg-card'
+                      }`}
                     >
-                      Déchiffrer
-                    </button>
+                      <p>{message.content}</p>
+                      <p className="text-xs opacity-70 mt-1">
+                        {new Date(message.createdAt).toLocaleTimeString()}
+                      </p>
+                    </div>
+                    {message.senderId !== user?.id && (
+                      <button
+                        onClick={() => setShowDecryptModal(message.id)}
+                        className="inline-flex items-center justify-center ml-2 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                      >
+                        Déchiffrer
+                      </button>
+                    )}
+                  </div>
+                  {decryptedMessages[message.id] && (
+                    <div className="text-xs text-green-400 mt-1">
+                      Message déchiffré : {decryptedMessages[message.id]}
+                    </div>
                   )}
-                </div>
+                </>
               ))}
               <div ref={messagesEndRef} />
             </div>

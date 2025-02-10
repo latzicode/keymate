@@ -54,13 +54,14 @@ export async function POST(request: Request) {
       }, { status: 403 });
     }
 
-    // On enregistre directement le message sans re-chiffrer
+    // On enregistre le message
     const message = await prisma.message.create({
       data: {
         senderId: payload.userId,
         receiverId,
-        content,  // On garde le message tel qu'il est
-        usedKeyId: keyId
+        content,
+        usedKeyId: keyId,
+        signature: ''  // On met une signature vide pour l'instant
       }
     });
 
