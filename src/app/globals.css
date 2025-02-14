@@ -3,13 +3,15 @@
 @tailwind utilities;
 
 :root {
-  --primary: #7C3AED;
+  --primary: #7D2AE8;
   --primary-dark: #6D28D9;
-  --background: #0F172A;
-  --foreground: #F8FAFC;
-  --card: #1E293B;
+  --background: #0A0A0A;
+  --foreground: #EAEAEA;
+  --card: #1E1E1E;
   --border: #334155;
-  --muted: #64748B;
+  --muted: #666666;
+  --accent: #00E5FF;
+  --success: #00FF41;
 }
 
 @layer base {
@@ -24,6 +26,21 @@
   @keyframes matrix-bg {
     0% { background-position: 0% 0%; }
     100% { background-position: 100% 100%; }
+  }
+
+  /* Application des polices par défaut */
+  html {
+    font-family: var(--font-inter), system-ui, sans-serif;
+  }
+
+  /* Titres avec Orbitron */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+
+  /* Éléments de code avec JetBrains Mono */
+  code, pre {
+    @apply font-mono;
   }
 }
 

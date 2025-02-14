@@ -16,6 +16,13 @@ const config: Config = {
         card: 'var(--card)',
         border: 'var(--border)',
         muted: 'var(--muted)',
+        accent: 'var(--accent)',
+        success: 'var(--success)',
+      },
+      fontFamily: {
+        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-orbitron)', 'sans-serif'],
+        mono: ['var(--font-jetbrains)', 'monospace']
       },
       animation: {
         'glow': 'glow 2s ease-in-out infinite',
